@@ -7,9 +7,17 @@ public class FirstPersonController : MonoBehaviour
     private PlayerState playerState;
     private WallRunAbility wallRunAbility;
     private float currentWallRunLean;
+    private Quaternion gravityOrientation;
+    private Quaternion gravityTransitionStartOrientation;
+    private float gravityTransitionProgress = 1f;
+    private bool gravityRotationConstraintsReleased;
+    private Vector3 GravityUp => Physics.gravity.sqrMagnitude > 0.001f
+        ? -Physics.gravity.normalized
+        : Vector3.up;
 
     [Header("Camera Movement")]
     public Camera playerCamera;
+    [SerializeField, Min(0.01f)] private float gravityRotationTransitionDuration = 0.5f;
 
     public float fov = 60f;
     public bool invertCamera = false;
@@ -75,13 +83,11 @@ public class FirstPersonController : MonoBehaviour
     public bool enableJump = true;
     public float jumpPower = 10f;
     public float jumpBufferTime = 0.2f;
-    public float coyoteTime = 0.15f;
     public float risingGravityMultiplier = 1.5f;
     public float fallingGravityMultiplier = 2.5f;
 
     // Internal Variables
     private float jumpBufferRemaining;
-    private float coyoteTimeRemaining;
     private bool groundContactThisStep;
 
 
@@ -122,6 +128,7 @@ public class FirstPersonController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         playerState = GetComponent<PlayerState>();
         wallRunAbility = GetComponent<WallRunAbility>();
+        gravityOrientation = transform.rotation;
         standingRigidbodyConstraints = rb.constraints;
         playerCapsule = GetComponent<CapsuleCollider>();
 
@@ -146,6 +153,7 @@ public class FirstPersonController : MonoBehaviour
         if(lockCursor)
         {
             Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
         }
 
     }
@@ -154,16 +162,28 @@ public class FirstPersonController : MonoBehaviour
 
     private void Update()
     {
+        InputManager cameraInput = InputManager.Instance;
+        bool gravityUIOpen = cameraInput.TabHeld;
+        if (gravityUIOpen)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = false;
+        }
+        else if (lockCursor)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
         #region Camera
 
         // Control camera movement
-        if(cameraCanMove)
+        if(cameraCanMove && !gravityUIOpen)
         {
-            InputManager cameraInput = InputManager.Instance;
             Vector2 lookInput = cameraInput.Look;
             float lookScale = cameraInput.LookUsesPointer ? mouseSensitivity : gamepadLookSpeed * Time.deltaTime;
 
-            yaw = transform.localEulerAngles.y + lookInput.x * lookScale;
+            yaw += lookInput.x * lookScale;
 
             if (!invertCamera)
             {
@@ -272,15 +292,33 @@ public class FirstPersonController : MonoBehaviour
 
         #endregion
 
-        bool canJump = enableJump && jumpBufferRemaining > 0f && (IsGrounded || coyoteTimeRemaining > 0f) && CanJumpFromCurrentState();
-        if (canJump)
+        if (enableJump && jumpBufferRemaining > 0f && IsGrounded)
         {
             Jump();
             jumpBufferRemaining = 0f;
-            coyoteTimeRemaining = 0f;
         }
 
-        transform.localRotation = Quaternion.Euler(currentSlideTilt, yaw, 0f);
+        Quaternion smoothedGravityOrientation = gravityOrientation;
+        if (gravityTransitionProgress < 1f)
+        {
+            gravityTransitionProgress = Mathf.Min(
+                1f, gravityTransitionProgress + Time.deltaTime / gravityRotationTransitionDuration);
+            float easedProgress = Mathf.SmoothStep(0f, 1f, gravityTransitionProgress);
+            smoothedGravityOrientation = Quaternion.Slerp(
+                gravityTransitionStartOrientation, gravityOrientation, easedProgress);
+        }
+
+        transform.rotation = smoothedGravityOrientation * Quaternion.Euler(currentSlideTilt, yaw, 0f);
+        if (gravityTransitionProgress >= 1f && gravityRotationConstraintsReleased)
+        {
+            rb.rotation = transform.rotation;
+            rb.angularVelocity = Vector3.zero;
+            rb.constraints = IsSliding
+                ? standingRigidbodyConstraints & ~RigidbodyConstraints.FreezeRotationX
+                : standingRigidbodyConstraints;
+            gravityRotationConstraintsReleased = false;
+        }
+
         float targetWallRunLean = wallRunAbility != null ? wallRunAbility.CameraLeanAngle : 0f;
         currentWallRunLean = Mathf.MoveTowardsAngle(currentWallRunLean, targetWallRunLean, 180f * Time.deltaTime);
         playerCamera.transform.localEulerAngles = new Vector3(pitch - currentSlideTilt, 0f, currentWallRunLean);
@@ -293,22 +331,15 @@ public class FirstPersonController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        bool groundedThisStep = groundContactThisStep || CheckGroundedRaycast();
+        Vector3 gravityUp = GravityUp;
+        float velocityAlongGravityUp = Vector3.Dot(rb.linearVelocity, gravityUp);
+        bool groundedThisStep = groundContactThisStep && velocityAlongGravityUp <= 0.1f;
         groundContactThisStep = false;
-
-        if (groundedThisStep)
-        {
-            coyoteTimeRemaining = coyoteTime;
-        }
-        else if (coyoteTimeRemaining > 0f)
-        {
-            coyoteTimeRemaining = Mathf.Max(0f, coyoteTimeRemaining - Time.fixedDeltaTime);
-        }
 
         // WallRunAbility applies its own reduced gravity while wall-running.
         if (!groundedThisStep && CurrentState != PlayerStateEnum.WallRun)
         {
-            float gravityMultiplier = rb.linearVelocity.y > 0f
+            float gravityMultiplier = velocityAlongGravityUp > 0f
                 ? risingGravityMultiplier
                 : fallingGravityMultiplier;
             rb.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
@@ -319,7 +350,7 @@ public class FirstPersonController : MonoBehaviour
         {
             // Keep the slide state through brief missed ground-contact samples. The slide timer
             // ends the slide; if the player has actually left the ground, EndSlide moves to OnAir.
-            if (!groundedThisStep && coyoteTimeRemaining <= 0f && state != PlayerStateEnum.OnAir && state != PlayerStateEnum.Slide)
+            if (!groundedThisStep && state != PlayerStateEnum.OnAir && state != PlayerStateEnum.Slide)
             {
                 SetState(PlayerStateEnum.OnAir);
             }
@@ -331,12 +362,6 @@ public class FirstPersonController : MonoBehaviour
         }
 
         if (!playerCanMove || !IsControllerLocomotionState(CurrentState))
-        {
-            return;
-        }
-
-        // Preserve wall jump momentum while in the push phase
-        if (wallRunAbility != null && wallRunAbility.HasWallJumpMomentum)
         {
             return;
         }
@@ -374,61 +399,25 @@ public class FirstPersonController : MonoBehaviour
         Vector3 worldMoveDirection = sliding ? moveDirection : transform.TransformDirection(moveDirection);
         Vector3 targetVelocity = worldMoveDirection * currentMoveSpeed;
         Vector3 velocityChange = targetVelocity - rb.linearVelocity;
+        Vector3 tangentVelocityChange = Vector3.ProjectOnPlane(velocityChange, gravityUp);
+        if (tangentVelocityChange.magnitude > maxVelocityChange)
+        {
+            tangentVelocityChange = tangentVelocityChange.normalized * maxVelocityChange;
+        }
 
-        float effectiveMaxChange = (state == PlayerStateEnum.OnAir)
-            ? maxVelocityChange * 0.25f
-            : maxVelocityChange;
-
-        velocityChange.x = Mathf.Clamp(velocityChange.x, -effectiveMaxChange, effectiveMaxChange);
-        velocityChange.z = Mathf.Clamp(velocityChange.z, -effectiveMaxChange, effectiveMaxChange);
-        velocityChange.y = 0f;
-
-        rb.AddForce(velocityChange, ForceMode.VelocityChange);
+        rb.AddForce(tangentVelocityChange, ForceMode.VelocityChange);
     }
-
-    private void OnCollisionEnter(Collision collision)
-    {
-        CheckGroundContacts(collision);
-    }
-
     private void OnCollisionStay(Collision collision)
-    {
-        CheckGroundContacts(collision);
-    }
-
-    private void CheckGroundContacts(Collision collision)
     {
         for (int i = 0; i < collision.contactCount; i++)
         {
-            if (collision.GetContact(i).normal.y > 0.5f)
+            if (Vector3.Dot(collision.GetContact(i).normal, GravityUp) > 0.5f)
             {
                 groundContactThisStep = true;
                 return;
             }
         }
     }
-
-    private bool CheckGroundedRaycast()
-    {
-        if (playerCapsule == null)
-        {
-            return false;
-        }
-
-        Vector3 origin = new Vector3(
-            playerCapsule.bounds.center.x,
-            playerCapsule.bounds.min.y + 0.1f,
-            playerCapsule.bounds.center.z);
-
-        float radius = playerCapsule.radius * 0.9f;
-        float distance = 0.2f;
-
-        return Physics.SphereCast(
-            origin, radius, Vector3.down, out RaycastHit hit, distance,
-            groundLayerMask, QueryTriggerInteraction.Ignore)
-            && hit.normal.y > 0.5f;
-    }
-
     private void Jump()
     {
         if (!CanJumpFromCurrentState())
@@ -441,13 +430,57 @@ public class FirstPersonController : MonoBehaviour
             EndSlide(IsGrounded);
         }
 
-        Vector3 velocity = rb.linearVelocity;
-        velocity.y = 0f;
-        rb.linearVelocity = velocity;
-
-        rb.AddForce(0f, jumpPower, 0f, ForceMode.Impulse);
+        rb.AddForce(GravityUp * jumpPower, ForceMode.Impulse);
         SetState(PlayerStateEnum.OnAir);
-        coyoteTimeRemaining = 0f;
+    }
+
+    public float GetSnappedPlayerYaw()
+    {
+        // Snap the player's local yaw, which is measured around their current local up axis.
+        float snappedYaw = Mathf.Floor((yaw + 22.5f) / 45f) * 45f;
+        if (snappedYaw > 180f)
+        {
+            snappedYaw -= 360f;
+        }
+        else if (snappedYaw < -180f)
+        {
+            snappedYaw += 360f;
+        }
+
+        return Mathf.Approximately(snappedYaw, -180f) ? 180f : snappedYaw;
+    }
+
+    public Vector3 GetSnappedPlayerRight()
+    {
+        Quaternion snappedPlayerOrientation = gravityOrientation * Quaternion.Euler(0f, GetSnappedPlayerYaw(), 0f);
+        return snappedPlayerOrientation * Vector3.right;
+    }
+
+    public Vector3 GetSnappedPlayerUp()
+    {
+        Quaternion snappedPlayerOrientation = gravityOrientation * Quaternion.Euler(0f, GetSnappedPlayerYaw(), 0f);
+        return snappedPlayerOrientation * Vector3.up;
+    }
+
+    public void AlignToGravity(Vector3 gravity, float snappedPlayerYaw)
+    {
+        if (gravity.sqrMagnitude < 0.001f)
+        {
+            return;
+        }
+
+        Quaternion snappedPlayerOrientation = gravityOrientation * Quaternion.Euler(0f, snappedPlayerYaw, 0f);
+        Vector3 gravityInPlayerHeading = Quaternion.Inverse(snappedPlayerOrientation) * gravity.normalized;
+        float localZRoll = Mathf.Atan2(gravityInPlayerHeading.x, -gravityInPlayerHeading.y) * Mathf.Rad2Deg;
+        gravityOrientation = snappedPlayerOrientation * Quaternion.Euler(0f, 0f, localZRoll);
+        gravityTransitionStartOrientation = transform.rotation;
+        gravityTransitionProgress = 0f;
+        yaw = 0f;
+
+        // The prefab freezes all Rigidbody rotation axes; release them during the animated roll.
+        rb.constraints = standingRigidbodyConstraints & ~RigidbodyConstraints.FreezeRotation;
+        rb.angularVelocity = Vector3.zero;
+        gravityRotationConstraintsReleased = true;
     }
     private void Crouch()
     {
@@ -469,8 +502,7 @@ public class FirstPersonController : MonoBehaviour
     }
     private bool CanStartSlide(Vector2 moveInput)
     {
-        Vector3 horizontalVelocity = rb.linearVelocity;
-        horizontalVelocity.y = 0f;
+        Vector3 horizontalVelocity = Vector3.ProjectOnPlane(rb.linearVelocity, GravityUp);
         PlayerStateEnum state = CurrentState;
 
         return enableSlide && !playerState.IsInState(PlayerStateEnum.Slide)
@@ -484,9 +516,12 @@ public class FirstPersonController : MonoBehaviour
     {
         slideTimeRemaining = slideDuration;
         slideDirection = Vector3.ProjectOnPlane(
-            transform.TransformDirection(new Vector3(moveInput.x, 0f, moveInput.y)), Vector3.up).normalized;
+            transform.TransformDirection(new Vector3(moveInput.x, 0f, moveInput.y)), GravityUp).normalized;
         slideCurrentSpeed = Mathf.Max(currentMoveSpeed, standingWalkSpeed) * slideSpeedMultiplier;
-        rb.constraints = standingRigidbodyConstraints & ~RigidbodyConstraints.FreezeRotationX;
+        RigidbodyConstraints slideRotationConstraints = gravityRotationConstraintsReleased
+            ? RigidbodyConstraints.FreezeRotation
+            : RigidbodyConstraints.FreezeRotationX;
+        rb.constraints = standingRigidbodyConstraints & ~slideRotationConstraints;
         SetState(PlayerStateEnum.Slide);
     }
 
@@ -561,7 +596,8 @@ public class FirstPersonController : MonoBehaviour
 
         float targetTilt = sliding ? slideTiltAngle : 0f;
         currentSlideTilt = Mathf.MoveTowards(currentSlideTilt, targetTilt, slideTiltTransitionSpeed * deltaTime);
-        if (!sliding && Mathf.Approximately(currentSlideTilt, 0f) && rb.constraints != standingRigidbodyConstraints)
+        if (!sliding && Mathf.Approximately(currentSlideTilt, 0f)
+            && !gravityRotationConstraintsReleased && rb.constraints != standingRigidbodyConstraints)
         {
             rb.rotation = transform.rotation;
             rb.constraints = standingRigidbodyConstraints;
@@ -589,25 +625,30 @@ public class FirstPersonController : MonoBehaviour
             return true;
         }
 
-        float currentTop = playerCapsule.bounds.max.y;
-        float standingTop = transform.position.y + (Quaternion.Euler(0f, yaw, 0f) * standingCapsuleCenter).y + standingCapsuleHeight * 0.5f;
-        float clearance = standingTop - currentTop;
+        Vector3 up = transform.up;
+        Vector3 worldCenter = transform.TransformPoint(playerCapsule.center);
+        Vector3 scale = transform.lossyScale;
+        float worldRadius = playerCapsule.radius * Mathf.Max(scale.x, scale.z);
+        float currentWorldHeight = playerCapsule.height * scale.y;
+        float standingWorldHeight = standingCapsuleHeight * scale.y;
+        Vector3 currentTop = worldCenter + up * Mathf.Max(0f, currentWorldHeight * 0.5f - worldRadius);
+        float clearance = standingWorldHeight - currentWorldHeight;
         if (clearance <= 0.01f)
         {
             return true;
         }
 
-        Vector3 origin = new Vector3(playerCapsule.bounds.center.x, currentTop - 0.02f, playerCapsule.bounds.center.z);
-        float probeOffset = playerCapsule.bounds.extents.x * 0.15f;
+        Vector3 origin = currentTop + up * 0.02f;
+        float probeOffset = worldRadius * 0.5f;
         Vector3 right = transform.right * probeOffset;
         Vector3 forward = transform.forward * probeOffset;
         float probeDistance = clearance + 0.05f;
 
-        return !Physics.Raycast(origin, Vector3.up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-            && !Physics.Raycast(origin + right, Vector3.up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-            && !Physics.Raycast(origin - right, Vector3.up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-            && !Physics.Raycast(origin + forward, Vector3.up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-            && !Physics.Raycast(origin - forward, Vector3.up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        return !Physics.Raycast(origin, up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+            && !Physics.Raycast(origin + right, up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+            && !Physics.Raycast(origin - right, up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+            && !Physics.Raycast(origin + forward, up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+            && !Physics.Raycast(origin - forward, up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
     }
     #region Head Bob
     private void HeadBob()

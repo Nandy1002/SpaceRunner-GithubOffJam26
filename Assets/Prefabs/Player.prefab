@@ -205,6 +205,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerCamera: {fileID: 4459864851310106426}
+  gravityRotationTransitionDuration: 0.5
   fov: 60
   invertCamera: 0
   cameraCanMove: 1
@@ -238,7 +239,6 @@ MonoBehaviour:
   enableJump: 1
   jumpPower: 8
   jumpBufferTime: 0.2
-  coyoteTime: 0.15
   risingGravityMultiplier: 1.5
   fallingGravityMultiplier: 2.5
   enableCrouch: 0
@@ -297,9 +297,8 @@ MonoBehaviour:
     m_Bits: 64
   wallJumpUpForce: 6
   wallJumpAwayForce: 5
-  wallJumpForwardMultiplier: 1
   wallJumpRegrabCooldown: 0.75
-  wallJumpPushDuration: 0.45
+  wallJumpRegrabSurfaceDistance: 0.5
 --- !u!114 &8703617249031525962
 MonoBehaviour:
   m_ObjectHideFlags: 0

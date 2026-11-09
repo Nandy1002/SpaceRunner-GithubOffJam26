@@ -21,29 +21,23 @@ public class WallRunAbility : MonoBehaviour, IAbility
     [SerializeField] private LayerMask groundLayerMask = ~0;
 
     [Header("Wall Jump")]
-    [SerializeField, Min(0f)] private float wallJumpUpForce = 9f;
-    [SerializeField, Min(0f)] private float wallJumpAwayForce = 8f;
-    [SerializeField, Min(0f)] private float wallJumpForwardMultiplier = 1f;
+    [SerializeField, Min(0f)] private float wallJumpUpForce = 4f;
+    [SerializeField, Min(0f)] private float wallJumpAwayForce = 3f;
     [SerializeField, Min(0f)] private float wallJumpRegrabCooldown = 0.75f;
-    [SerializeField, Min(0f)] private float wallJumpPushDuration = 0.45f;
+    [SerializeField, Min(0f)] private float wallJumpRegrabSurfaceDistance = 0.5f;
     private Rigidbody rb;
     private PlayerState playerState;
-    private CapsuleCollider capsuleCollider;
     private bool isWallRunning;
     private bool jumpQueued;
-    private float jumpBufferTimer;
     private float wallRunTimer;
     private Vector3 wallNormal;
     private Collider lastWallCollider;
     private Vector3 lastWallPoint;
     private Vector3 lastWallNormal;
-    private bool hasWallJumpedInAir;
     private float wallJumpRegrabTimer;
-    private float wallJumpPushTimer;
     private readonly RaycastHit[] wallHitBuffer = new RaycastHit[8];
 
     public bool IsActive => isWallRunning;
-    public bool HasWallJumpMomentum => wallJumpPushTimer > 0f;
 
     public float CameraLeanAngle
     {
@@ -63,7 +57,6 @@ public class WallRunAbility : MonoBehaviour, IAbility
     {
         rb = GetComponent<Rigidbody>();
         playerState = GetComponent<PlayerState>();
-        capsuleCollider = GetComponent<CapsuleCollider>();
     }
 
     private void Update()
@@ -72,15 +65,6 @@ public class WallRunAbility : MonoBehaviour, IAbility
         if (InputManager.Instance != null && InputManager.Instance.JumpPressedThisFrame)
         {
             jumpQueued = true;
-            jumpBufferTimer = 0.2f;
-        }
-        else if (jumpBufferTimer > 0f)
-        {
-            jumpBufferTimer -= Time.deltaTime;
-            if (jumpBufferTimer <= 0f)
-            {
-                jumpQueued = false;
-            }
         }
     }
 
@@ -89,22 +73,13 @@ public class WallRunAbility : MonoBehaviour, IAbility
         if (wallJumpRegrabTimer > 0f)
         {
             wallJumpRegrabTimer = Mathf.Max(0f, wallJumpRegrabTimer - Time.fixedDeltaTime);
-        }
-
-        if (wallJumpPushTimer > 0f)
-        {
-            wallJumpPushTimer = Mathf.Max(0f, wallJumpPushTimer - Time.fixedDeltaTime);
+            if (wallJumpRegrabTimer <= 0f)
+            {
+                lastWallCollider = null;
+            }
         }
 
         bool grounded = IsGrounded();
-        if (grounded)
-        {
-            hasWallJumpedInAir = false;
-            lastWallCollider = null;
-            lastWallNormal = Vector3.zero;
-            wallJumpRegrabTimer = 0f;
-        }
-
         bool foundWall = FindWall(out Vector3 detectedWallNormal, out float detectedWallDistance,
             out Collider detectedWallCollider, out Vector3 detectedWallPoint);
         bool movingForward = InputManager.Instance != null && InputManager.Instance.Move.y > 0.1f;
@@ -134,6 +109,9 @@ public class WallRunAbility : MonoBehaviour, IAbility
         {
             StartWallRun(detectedWallNormal, detectedWallCollider, detectedWallPoint);
         }
+
+        // Consume the jump press so it cannot trigger later unexpectedly.
+        jumpQueued = false;
     }
 
     private bool FindWall(out Vector3 normal, out float distance, out Collider wallCollider, out Vector3 point)
@@ -170,15 +148,14 @@ public class WallRunAbility : MonoBehaviour, IAbility
         for (int i = 0; i < hitCount; i++)
         {
             RaycastHit hit = wallHitBuffer[i];
-            bool isSameWallSurface = (hit.collider == lastWallCollider)
-                || (lastWallNormal != Vector3.zero && Vector3.Dot(hit.normal, lastWallNormal) > 0.3f);
-
-            bool blockedByWallJump = (hasWallJumpedInAir || wallJumpRegrabTimer > 0f) && isSameWallSurface;
+            bool sameSurfaceAsWallJump = hit.collider == lastWallCollider
+                && Vector3.Distance(hit.point, lastWallPoint) <= wallJumpRegrabSurfaceDistance
+                && Vector3.Dot(hit.normal, lastWallNormal) > 0.95f;
 
             if (hit.collider == null
                 || hit.transform == transform
                 || hit.transform.IsChildOf(transform)
-                || blockedByWallJump
+                || (wallJumpRegrabTimer > 0f && sameSurfaceAsWallJump)
                 || hit.distance >= closestDistance)
             {
                 continue;
@@ -194,32 +171,28 @@ public class WallRunAbility : MonoBehaviour, IAbility
 
     private bool IsGrounded()
     {
-        if (capsuleCollider == null)
-        {
-            capsuleCollider = GetComponent<CapsuleCollider>();
-        }
-
         Vector3 checkPosition;
-        if (capsuleCollider != null)
-        {
-            // Ground check from the bottom of the capsule collider bounds to avoid head bob or joint offsets.
-            checkPosition = new Vector3(
-                capsuleCollider.bounds.center.x,
-                capsuleCollider.bounds.min.y + groundCheckRadius,
-                capsuleCollider.bounds.center.z);
-        }
-        else if (groundCheck != null)
+        if (groundCheck != null)
         {
             checkPosition = groundCheck.position;
         }
         else
         {
-            checkPosition = transform.position;
+            // Fall back to the player's capsule so the ability works without a separate
+            // ground-check transform assigned in the Inspector.
+            CapsuleCollider capsule = GetComponent<CapsuleCollider>();
+            if (capsule == null)
+            {
+                return false;
+            }
+
+            checkPosition = new Vector3(capsule.bounds.center.x, capsule.bounds.min.y + groundCheckRadius,
+                capsule.bounds.center.z);
         }
 
         // A downward ray avoids counting a nearby vertical wall as ground.
         RaycastHit[] hits = Physics.RaycastAll(
-            checkPosition + Vector3.up * 0.05f, Vector3.down, groundCheckRadius + 0.15f,
+            checkPosition + Vector3.up * 0.05f, Vector3.down, groundCheckRadius + 0.1f,
             groundLayerMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < hits.Length; i++)
         {
@@ -237,7 +210,6 @@ public class WallRunAbility : MonoBehaviour, IAbility
     private void StartWallRun(Vector3 normal, Collider wallCollider, Vector3 point)
     {
         isWallRunning = true;
-        hasWallJumpedInAir = false;
         wallNormal = normal;
         lastWallCollider = wallCollider;
         lastWallPoint = point;
@@ -291,26 +263,21 @@ public class WallRunAbility : MonoBehaviour, IAbility
 
     private void WallJump()
     {
-        hasWallJumpedInAir = true;
-        lastWallNormal = wallNormal;
         wallJumpRegrabTimer = wallJumpRegrabCooldown;
-        wallJumpPushTimer = wallJumpPushDuration;
-        jumpQueued = false;
-        jumpBufferTimer = 0f;
         StopWallRun();
 
-        Vector3 wallForward = Vector3.ProjectOnPlane(transform.forward, wallNormal).normalized;
-        float forwardSpeed = Mathf.Max(Vector3.Dot(rb.linearVelocity, wallForward), wallRunSpeed * 0.75f);
-        Vector3 forwardVelocity = wallForward * (forwardSpeed * wallJumpForwardMultiplier);
+        Vector3 velocity = rb.linearVelocity;
+        velocity.y = 0f;
+        rb.linearVelocity = velocity;
 
-        Vector3 jumpVelocity = forwardVelocity + wallNormal * wallJumpAwayForce + Vector3.up * wallJumpUpForce;
-        rb.linearVelocity = jumpVelocity;
+        rb.AddForce(
+            Vector3.up * wallJumpUpForce + wallNormal * wallJumpAwayForce,
+            ForceMode.VelocityChange);
     }
 
     private void StopWallRun()
     {
         isWallRunning = false;
-        hasWallJumpedInAir = true;
         wallRunTimer = 0f;
         if (playerState.IsInState(PlayerStateEnum.WallRun))
         {

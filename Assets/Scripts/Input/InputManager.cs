@@ -10,6 +10,7 @@ public sealed class InputManager : MonoBehaviour
     private float forwardHoldTime;
 
     public InputSystem_Actions.PlayerActions Player => controls.Player;
+    public InputSystem_Actions.UIActions UI => controls.UI;
     public Vector2 Move => Player.Move.ReadValue<Vector2>();
     public Vector2 Look => Player.Look.ReadValue<Vector2>();
     public bool LookUsesPointer => Player.Look.activeControl?.device is Pointer;
@@ -22,6 +23,9 @@ public sealed class InputManager : MonoBehaviour
     public bool CrouchPressedThisFrame => Player.Crouch.WasPressedThisFrame();
     public bool CrouchHeld => Player.Crouch.IsPressed();
     public bool CrouchReleasedThisFrame => Player.Crouch.WasReleasedThisFrame();
+    public bool TabPressedThisFrame => Player.Tab.WasPressedThisFrame();
+    public bool TabReleasedThisFrame => Player.Tab.WasReleasedThisFrame();
+    public bool TabHeld => Player.Tab.IsPressed();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void CreateIfMissing()
