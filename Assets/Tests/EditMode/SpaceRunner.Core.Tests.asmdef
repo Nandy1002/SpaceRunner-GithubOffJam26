@@ -1,0 +1,6 @@
+{
+  "name": "SpaceRunner.Core.Tests",
+  "references": ["SpaceRunner.Core"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}

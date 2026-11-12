@@ -1,0 +1,5 @@
+{
+  "name": "SpaceRunner.Core",
+  "rootNamespace": "SpaceRunner.Core",
+  "noEngineReferences": true
+}

@@ -1,0 +1,13 @@
+{
+  "name": "SpaceRunner.Editor",
+  "references": [
+    "SpaceRunner.Runtime",
+    "SpaceRunner.Player",
+    "Unity.ugui",
+    "Unity.InputSystem",
+    "Unity.RenderPipelines.Universal.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}

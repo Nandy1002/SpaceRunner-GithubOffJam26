@@ -1,0 +1,8 @@
+{
+  "name": "SpaceRunner.Player",
+  "references": [
+    "Unity.InputSystem",
+    "Unity.ugui"
+  ],
+  "autoReferenced": true
+}
