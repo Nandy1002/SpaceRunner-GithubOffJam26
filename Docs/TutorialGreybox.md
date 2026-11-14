@@ -2,6 +2,8 @@
 
 Open `Assets/_Scenes/TutorialGreybox.unity`, enter Play, then choose **START RUN**. The scene uses the existing Player, watch, health and tower systems. Its geometry is saved as ordinary scene objects; no level generator runs when you press Play.
 
+All seven lesson areas now use the orbital-station art kit. Their route dimensions, platform gaps, recovery ramps, collision layers, tower placement and saved teaching-text positions remain unchanged. Editable visuals live under each section's **StationArt** group; see [EnvironmentArt.md](EnvironmentArt.md) for the prefab kit and art validation. The final hatch is still a visual destination, without a level-transition action.
+
 ## Layout
 
 The route follows world **+Z**, from Z = -12 to 508 (520 m end to end). The route diagram's folded arrows describe lesson order, not turns in the actual scene. Most practice spaces are 24–32 m wide; individual jump platforms are 16–24 m wide. Recovery decks extend beyond the playable route.
