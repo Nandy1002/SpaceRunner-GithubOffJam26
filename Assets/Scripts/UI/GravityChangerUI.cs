@@ -10,6 +10,7 @@ public class GravityChangerUI : MonoBehaviour
     [SerializeField] private Image cursor;
     [SerializeField] private Image cursorMoveBorder;
     [SerializeField] private List<Image> gravityImages = new List<Image>();
+    [SerializeField, Range(0.01f, 1f)] private float wheelOpenTimeScale = 0.1f;
 
     private CanvasGroup canvasGroup;
     private RectTransform cursorRectTransform;
@@ -20,6 +21,11 @@ public class GravityChangerUI : MonoBehaviour
     private Vector3[] gravityImageOriginalScales;
     private int hoveredGravityIndex = -1;
     private int selectedGravityIndex = -1;
+    private bool gravityWheelOpen;
+    private float previousTimeScale = 1f;
+    private float previousFixedDeltaTime = 0.02f;
+    private Animator[] wheelAnimators;
+    private AnimatorUpdateMode[] previousAnimatorUpdateModes;
 
     public event Action<int> GravitySelected;
 
@@ -28,6 +34,13 @@ public class GravityChangerUI : MonoBehaviour
     void Awake()
     {
         canvasGroup = GetComponent<CanvasGroup>();
+        wheelAnimators = GetComponentsInChildren<Animator>(true);
+        previousAnimatorUpdateModes = new AnimatorUpdateMode[wheelAnimators.Length];
+        for (int i = 0; i < wheelAnimators.Length; i++)
+        {
+            previousAnimatorUpdateModes[i] = wheelAnimators[i].updateMode;
+        }
+
         if (cursor != null)
         {
             cursorRectTransform = cursor.rectTransform;
@@ -123,6 +136,55 @@ public class GravityChangerUI : MonoBehaviour
         canvasGroup.alpha = isVisible ? 1f : 0f;
         canvasGroup.interactable = isVisible;
         canvasGroup.blocksRaycasts = isVisible;
+
+        if (isVisible && !gravityWheelOpen)
+        {
+            previousTimeScale = Time.timeScale;
+            previousFixedDeltaTime = Time.fixedDeltaTime;
+            Time.timeScale = wheelOpenTimeScale;
+
+            float fixedDeltaScale = previousTimeScale > 0f
+                ? wheelOpenTimeScale / previousTimeScale
+                : wheelOpenTimeScale;
+            Time.fixedDeltaTime = previousFixedDeltaTime * fixedDeltaScale;
+            SetWheelAnimatorsUnscaled(true);
+        }
+        else if (!isVisible && gravityWheelOpen)
+        {
+            RestoreTimeScale();
+            SetWheelAnimatorsUnscaled(false);
+        }
+
+        gravityWheelOpen = isVisible;
+    }
+
+    private void OnDisable()
+    {
+        if (gravityWheelOpen)
+        {
+            RestoreTimeScale();
+            SetWheelAnimatorsUnscaled(false);
+            gravityWheelOpen = false;
+        }
+    }
+
+    private void RestoreTimeScale()
+    {
+        Time.timeScale = previousTimeScale;
+        Time.fixedDeltaTime = previousFixedDeltaTime;
+    }
+
+    private void SetWheelAnimatorsUnscaled(bool unscaled)
+    {
+        for (int i = 0; i < wheelAnimators.Length; i++)
+        {
+            if (wheelAnimators[i] != null)
+            {
+                wheelAnimators[i].updateMode = unscaled
+                    ? AnimatorUpdateMode.UnscaledTime
+                    : previousAnimatorUpdateModes[i];
+            }
+        }
     }
     private int TrySelectGravityArea(Vector2 cursorScreenPosition)
     {
