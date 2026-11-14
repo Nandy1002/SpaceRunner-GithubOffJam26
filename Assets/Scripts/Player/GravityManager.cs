@@ -10,7 +10,10 @@ public class GravityManager : MonoBehaviour
     {
         if (playerController == null)
         {
-            playerController = FindFirstObjectByType<FirstPersonController>();
+            playerController = GetComponent<FirstPersonController>()
+                ?? GetComponentInParent<FirstPersonController>()
+                ?? FirstPersonController.Instance;
+
             if (playerController == null)
             {
                 Debug.LogWarning("PlayerController reference is not set in gravity manager", this);
@@ -43,7 +46,10 @@ public class GravityManager : MonoBehaviour
     {
         if (playerController == null)
         {
-            playerController = FindFirstObjectByType<FirstPersonController>();
+            playerController = GetComponent<FirstPersonController>()
+                ?? GetComponentInParent<FirstPersonController>()
+                ?? FirstPersonController.Instance;
+
             if (playerController == null)
             {
                 Debug.LogWarning("No FirstPersonController was found.", this);

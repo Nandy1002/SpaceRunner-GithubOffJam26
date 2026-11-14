@@ -123,8 +123,11 @@ public class FirstPersonController : MonoBehaviour
     private bool IsCrouched => CurrentState == PlayerStateEnum.Crouch;
     private bool IsSprinting => CurrentState == PlayerStateEnum.Run || IsSliding;
 
+    public static FirstPersonController Instance { get; private set; }
+
     private void Awake()
     {
+        Instance = this;
         rb = GetComponent<Rigidbody>();
         playerState = GetComponent<PlayerState>();
         wallRunAbility = GetComponent<WallRunAbility>();
@@ -709,4 +712,12 @@ public class FirstPersonController : MonoBehaviour
         }
     }
     #endregion
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
 }

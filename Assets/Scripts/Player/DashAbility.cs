@@ -20,6 +20,8 @@ public class DashAbility : MonoBehaviour, IAbility
     private Vector3 dashDirection;
     private PlayerStateEnum stateBeforeDash;
 
+    public static DashAbility Instance { get; private set; }
+
     public bool IsActive => isDashing;
     public float DashCooldown => dashCooldown;
     public float CooldownRemaining => cooldownRemaining;
@@ -32,10 +34,19 @@ public class DashAbility : MonoBehaviour, IAbility
 
     private void Awake()
     {
+        Instance = this;
         rb = GetComponent<Rigidbody>();
         playerState = GetComponent<PlayerState>();
         playerCapsule = GetComponent<CapsuleCollider>();
         playerController = GetComponent<FirstPersonController>();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
     private void Update()

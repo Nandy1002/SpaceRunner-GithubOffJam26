@@ -3,12 +3,14 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Displays a dash cooldown indicator and readiness icon on the screen canvas (HUD).
-/// Attaches to any Screen Space Canvas or automatically locates/creates a screen-space HUD canvas.
+/// Uses direct component references, serialized properties, and singleton instance access
+/// without performing costly scene-wide FindObject scans.
 /// </summary>
 public class DashCooldownUI : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private DashAbility dashAbility;
+    [SerializeField] private Canvas targetCanvas;
     [SerializeField] private Sprite dashIconSprite;
     [SerializeField] private Sprite dialSprite;
     [SerializeField] private Image iconImage;
@@ -26,35 +28,48 @@ public class DashCooldownUI : MonoBehaviour
     private GameObject generatedCanvasObj;
     private bool wasReady = true;
 
-    private void Awake()
+    public void BindDashAbility(DashAbility ability)
     {
-        if (dashAbility == null)
+        dashAbility = ability;
+    }
+
+    public void BindTargetCanvas(Canvas canvas)
+    {
+        targetCanvas = canvas;
+    }
+
+    private DashAbility ResolveDashAbility()
+    {
+        if (dashAbility != null)
         {
-            dashAbility = GetComponentInParent<DashAbility>() ?? FindFirstObjectByType<DashAbility>();
+            return dashAbility;
         }
 
+        dashAbility = GetComponent<DashAbility>()
+            ?? GetComponentInParent<DashAbility>()
+            ?? DashAbility.Instance;
+
+        return dashAbility;
+    }
+
+    private void Awake()
+    {
+        ResolveDashAbility();
         EnsureUIElements();
     }
 
     private void Start()
     {
-        if (dashAbility == null)
-        {
-            dashAbility = GetComponentInParent<DashAbility>() ?? FindFirstObjectByType<DashAbility>();
-        }
-
+        ResolveDashAbility();
         EnsureUIElements();
     }
 
     private void Update()
     {
-        if (dashAbility == null)
+        DashAbility ability = ResolveDashAbility();
+        if (ability == null)
         {
-            dashAbility = GetComponentInParent<DashAbility>() ?? FindFirstObjectByType<DashAbility>();
-            if (dashAbility == null)
-            {
-                return;
-            }
+            return;
         }
 
         if (iconImage == null || cooldownFillImage == null)
@@ -66,9 +81,9 @@ public class DashCooldownUI : MonoBehaviour
             }
         }
 
-        bool ready = dashAbility.IsReady;
-        float remaining = dashAbility.CooldownRemaining;
-        float normalized = dashAbility.CooldownNormalized; // 1 = full cooldown, 0 = ready
+        bool ready = ability.IsReady;
+        float remaining = ability.CooldownRemaining;
+        float normalized = ability.CooldownNormalized; // 1 = full cooldown, 0 = ready
 
         if (cooldownFillImage != null)
         {
@@ -107,28 +122,19 @@ public class DashCooldownUI : MonoBehaviour
 
     private void EnsureUIElements()
     {
-        // If already wired, nothing more needed
+        // If already wired in Inspector or created, nothing more needed
         if (iconImage != null && cooldownFillImage != null)
         {
             return;
         }
 
-        // Find an existing Screen Space Canvas in the scene
-        Canvas targetCanvas = GetComponentInParent<Canvas>();
-        if (targetCanvas == null || targetCanvas.renderMode == RenderMode.WorldSpace)
+        // Check if assigned in Inspector or attached within a Canvas hierarchy
+        if (targetCanvas == null)
         {
-            Canvas[] allCanvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
-            foreach (Canvas c in allCanvases)
-            {
-                if (c.isActiveAndEnabled && c.renderMode != RenderMode.WorldSpace)
-                {
-                    targetCanvas = c;
-                    break;
-                }
-            }
+            targetCanvas = GetComponentInParent<Canvas>();
         }
 
-        // If no Screen Space Canvas exists in scene, create one
+        // If this component is not inside an existing Canvas, create a dedicated ScreenSpaceOverlay HUD Canvas
         if (targetCanvas == null)
         {
             generatedCanvasObj = new GameObject("DashHUD_Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
