@@ -6,7 +6,6 @@ public class GravityManager : MonoBehaviour
     [SerializeField] private FirstPersonController playerController;
 
     public void BindPlayer(FirstPersonController player) => playerController = player;
-
     private void Start()
     {
         if (playerController == null)
