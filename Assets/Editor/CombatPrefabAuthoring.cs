@@ -110,34 +110,133 @@ namespace SpaceRunner.Editor
                 Material("Melee", new Color(0.46f, 0.35f, 0.65f)));
             Save(root, "MeleeEnemy");
         }
+        private static Sprite LoadSprite(string path)
+        {
+            foreach (var obj in AssetDatabase.LoadAllAssetsAtPath(path))
+            {
+                if (obj is Sprite sprite) return sprite;
+            }
+            return null;
+        }
         private static RectTransform Rect(string name, Transform parent, Vector2 position, Vector2 size)
         {
             var rect = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
             rect.SetParent(parent, false); rect.anchoredPosition = position; rect.sizeDelta = size;
             return rect;
         }
+        private static void BuildDashUI(Transform root)
+        {
+            var dashPanel = Rect("Dash", root, new Vector2(-60, 60), new Vector2(80, 80));
+            dashPanel.anchorMin = dashPanel.anchorMax = dashPanel.pivot = new Vector2(1, 0);
+
+            var dialSprite = LoadSprite("Assets/Graphics/Sprites/DialOutline.png");
+            var iconSprite = LoadSprite("Assets/Graphics/Sprites/triangle.png");
+
+            var dashBg = Rect("DashBG", dashPanel, Vector2.zero, Vector2.zero).gameObject.AddComponent<Image>();
+            dashBg.rectTransform.anchorMin = Vector2.zero;
+            dashBg.rectTransform.anchorMax = Vector2.one;
+            dashBg.color = new Color(0.06f, 0.08f, 0.12f, 0.85f);
+            dashBg.raycastTarget = false;
+            if (dialSprite != null) dashBg.sprite = dialSprite;
+
+            var dashIcon = Rect("DashIcon", dashPanel, Vector2.zero, Vector2.zero).gameObject.AddComponent<Image>();
+            dashIcon.rectTransform.anchorMin = Vector2.zero;
+            dashIcon.rectTransform.anchorMax = Vector2.one;
+            dashIcon.rectTransform.offsetMin = new Vector2(16, 16);
+            dashIcon.rectTransform.offsetMax = new Vector2(-16, -16);
+            dashIcon.color = new Color(0.1f, 0.95f, 1f, 0.95f);
+            dashIcon.raycastTarget = false;
+            if (iconSprite != null) dashIcon.sprite = iconSprite;
+
+            var dashFill = Rect("DashCooldownFill", dashPanel, Vector2.zero, Vector2.zero).gameObject.AddComponent<Image>();
+            dashFill.rectTransform.anchorMin = Vector2.zero;
+            dashFill.rectTransform.anchorMax = Vector2.one;
+            dashFill.color = new Color(0f, 0f, 0f, 0.7f);
+            dashFill.type = Image.Type.Filled;
+            dashFill.fillMethod = Image.FillMethod.Radial360;
+            dashFill.fillOrigin = (int)Image.Origin360.Top;
+            dashFill.fillClockwise = false;
+            dashFill.fillAmount = 0f;
+            dashFill.raycastTarget = false;
+            if (dialSprite != null) dashFill.sprite = dialSprite;
+
+            var dashText = Rect("DashLabel", dashPanel, new Vector2(0, -6), new Vector2(100, 22)).gameObject.AddComponent<Text>();
+            dashText.rectTransform.anchorMin = new Vector2(0, 0);
+            dashText.rectTransform.anchorMax = new Vector2(1, 0);
+            dashText.rectTransform.pivot = new Vector2(0.5f, 1);
+            dashText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf") ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            dashText.fontSize = 13;
+            dashText.fontStyle = FontStyle.Bold;
+            dashText.alignment = TextAnchor.MiddleCenter;
+            dashText.color = Color.white;
+            dashText.text = "DASH";
+            dashText.raycastTarget = false;
+
+            var dashUI = dashPanel.gameObject.AddComponent<DashCooldownUI>();
+            var targetCanvas = root.GetComponent<Canvas>();
+            Bind(dashUI, "targetCanvas", targetCanvas);
+            Bind(dashUI, "iconImage", dashIcon);
+            Bind(dashUI, "cooldownFillImage", dashFill);
+            Bind(dashUI, "cooldownText", dashText);
+            Bind(dashUI, "dashIconSprite", iconSprite);
+            Bind(dashUI, "dialSprite", dialSprite);
+        }
         private static void CreateHud()
         {
-            if (Exists("HealthHUD")) return;
-            var root = Rect("Health HUD", null, Vector2.zero, new Vector2(1600, 900));
-            var canvas = root.gameObject.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 10;
-            var scaler = root.gameObject.AddComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1600, 900); scaler.matchWidthOrHeight = 0.5f;
-            var group = root.gameObject.AddComponent<CanvasGroup>(); group.interactable = group.blocksRaycasts = false; group.alpha = 0;
-            var panel = Rect("Health", root, new Vector2(40, 60), new Vector2(270, 60)); panel.anchorMin = panel.anchorMax = panel.pivot = Vector2.zero;
-            var text = Rect("Label", panel, new Vector2(0, 14), new Vector2(270, 34)).gameObject.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); text.fontSize = 24; text.text = "HEALTH  100 / 100";
-            text.alignment = TextAnchor.MiddleLeft; text.raycastTarget = false;
-            var barRect = Rect("Bar", panel, new Vector2(0, -18), new Vector2(270, 12));
-            var background = barRect.gameObject.AddComponent<Image>(); background.color = new Color(0.15f, 0.15f, 0.15f); background.raycastTarget = false;
-            var fill = Rect("Fill - Replace Sprite", barRect, Vector2.zero, Vector2.zero).gameObject.AddComponent<Image>();
-            fill.rectTransform.anchorMin = Vector2.zero; fill.rectTransform.anchorMax = Vector2.one;
-            fill.color = new Color(0.8f, 0.3f, 0.25f); fill.raycastTarget = false;
-            var bar = barRect.gameObject.AddComponent<Slider>(); bar.fillRect = fill.rectTransform;
-            bar.minValue = 0; bar.maxValue = 100; bar.value = 100; bar.interactable = false; bar.navigation = new Navigation { mode = Navigation.Mode.None };
-            var view = root.gameObject.AddComponent<HealthHudView>();
-            Bind(view, "label", text); Bind(view, "bar", bar); Bind(view, "group", group);
-            Save(root.gameObject, "HealthHUD");
+            string hudPath = AssetPath("HealthHUD");
+            GameObject rootObj;
+            bool isNew = !Exists("HealthHUD");
+            if (isNew)
+            {
+                var root = Rect("Health HUD", null, Vector2.zero, new Vector2(1600, 900));
+                var canvas = root.gameObject.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 10;
+                var scaler = root.gameObject.AddComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1600, 900); scaler.matchWidthOrHeight = 0.5f;
+                var group = root.gameObject.AddComponent<CanvasGroup>(); group.interactable = group.blocksRaycasts = false; group.alpha = 0;
+                var panel = Rect("Health", root, new Vector2(40, 60), new Vector2(270, 60)); panel.anchorMin = panel.anchorMax = panel.pivot = Vector2.zero;
+                var text = Rect("Label", panel, new Vector2(0, 14), new Vector2(270, 34)).gameObject.AddComponent<Text>();
+                text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); text.fontSize = 24; text.text = "HEALTH  100 / 100";
+                text.alignment = TextAnchor.MiddleLeft; text.raycastTarget = false;
+                var barRect = Rect("Bar", panel, new Vector2(0, -18), new Vector2(270, 12));
+                var background = barRect.gameObject.AddComponent<Image>(); background.color = new Color(0.15f, 0.15f, 0.15f); background.raycastTarget = false;
+                var fill = Rect("Fill - Replace Sprite", barRect, Vector2.zero, Vector2.zero).gameObject.AddComponent<Image>();
+                fill.rectTransform.anchorMin = Vector2.zero; fill.rectTransform.anchorMax = Vector2.one;
+                fill.color = new Color(0.8f, 0.3f, 0.25f); fill.raycastTarget = false;
+                var bar = barRect.gameObject.AddComponent<Slider>(); bar.fillRect = fill.rectTransform;
+                bar.minValue = 0; bar.maxValue = 100; bar.value = 100; bar.interactable = false; bar.navigation = new Navigation { mode = Navigation.Mode.None };
+                var view = root.gameObject.AddComponent<HealthHudView>();
+                Bind(view, "label", text); Bind(view, "bar", bar); Bind(view, "group", group);
+                rootObj = root.gameObject;
+            }
+            else
+            {
+                rootObj = PrefabUtility.LoadPrefabContents(hudPath);
+            }
+
+            try
+            {
+                Transform existingDash = rootObj.transform.Find("Dash");
+                if (existingDash != null)
+                {
+                    Object.DestroyImmediate(existingDash.gameObject);
+                }
+                BuildDashUI(rootObj.transform);
+                if (isNew)
+                {
+                    Save(rootObj, "HealthHUD");
+                }
+                else
+                {
+                    PrefabUtility.SaveAsPrefabAsset(rootObj, hudPath);
+                }
+            }
+            finally
+            {
+                if (!isNew)
+                {
+                    PrefabUtility.UnloadPrefabContents(rootObj);
+                }
+            }
         }
         private static void CreateSystem()
         {

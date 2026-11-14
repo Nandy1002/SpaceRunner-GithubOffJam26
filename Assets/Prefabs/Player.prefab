@@ -49,7 +49,6 @@ GameObject:
   - component: {fileID: 8162785971175964314}
   - component: {fileID: 1584490011142170115}
   - component: {fileID: 8703617249031525962}
-  - component: {fileID: 8162785971175964315}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -487,26 +486,4 @@ Transform:
   - {fileID: 7856400271511875313}
   m_Father: {fileID: 4459864850019384738}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &8162785971175964315
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4459864850019384750}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5f558c80f195b414dad1178db0845b98, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  dashAbility: {fileID: 8162785971175964314}
-  dashIconSprite: {fileID: 9164359298635338950, guid: d307db0d38c842a48a59d94412d59d38, type: 3}
-  dialSprite: {fileID: -1495934062544616119, guid: 3b59990a5f927084babf3e92af881bea, type: 3}
-  iconImage: {fileID: 0}
-  cooldownFillImage: {fileID: 0}
-  cooldownText: {fileID: 0}
-  readyColor: {r: 0.1, g: 0.95, b: 1, a: 0.95}
-  coolingColor: {r: 0.35, g: 0.45, b: 0.55, a: 0.5}
-  overlayFillColor: {r: 0, g: 0, b: 0, a: 0.7}
-  bgColor: {r: 0.06, g: 0.08, b: 0.12, a: 0.85}
-  showSecondsText: 1
+

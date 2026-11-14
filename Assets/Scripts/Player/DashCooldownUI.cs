@@ -101,7 +101,7 @@ public class DashCooldownUI : MonoBehaviour
             else
             {
                 iconImage.rectTransform.localScale = Vector3.MoveTowards(
-                    iconImage.rectTransform.localScale, Vector3.one, 2.5f * Time.deltaTime);
+                    iconImage.rectTransform.localScale, Vector3.one, 2.5f * Time.unscaledDeltaTime);
             }
         }
 
@@ -134,67 +134,98 @@ public class DashCooldownUI : MonoBehaviour
             targetCanvas = GetComponentInParent<Canvas>();
         }
 
+        Transform containerParent;
         // If this component is not inside an existing Canvas, create a dedicated ScreenSpaceOverlay HUD Canvas
         if (targetCanvas == null)
         {
             generatedCanvasObj = new GameObject("DashHUD_Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             targetCanvas = generatedCanvasObj.GetComponent<Canvas>();
             targetCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            targetCanvas.sortingOrder = 20;
+            targetCanvas.sortingOrder = 10;
 
             CanvasScaler scaler = generatedCanvasObj.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.referenceResolution = new Vector2(1600, 900);
             scaler.matchWidthOrHeight = 0.5f;
+
+            containerParent = targetCanvas.transform;
+        }
+        else if (transform is RectTransform && transform != targetCanvas.transform)
+        {
+            containerParent = transform;
+        }
+        else
+        {
+            containerParent = targetCanvas.transform;
         }
 
-        // Build UI container attached directly under the Screen Space Canvas
-        generatedContainer = new GameObject("DashIconContainer", typeof(RectTransform));
-        generatedContainer.transform.SetParent(targetCanvas.transform, false);
+        if (containerParent == transform)
+        {
+            generatedContainer = gameObject;
+        }
+        else
+        {
+            generatedContainer = new GameObject("DashIconContainer", typeof(RectTransform));
+            generatedContainer.transform.SetParent(containerParent, false);
 
-        RectTransform containerRect = generatedContainer.GetComponent<RectTransform>();
-        containerRect.anchorMin = new Vector2(1f, 0f); // Bottom-Right anchor
-        containerRect.anchorMax = new Vector2(1f, 0f);
-        containerRect.pivot = new Vector2(1f, 0f);
-        containerRect.anchoredPosition = new Vector2(-60f, 60f);
-        containerRect.sizeDelta = new Vector2(80f, 80f);
+            RectTransform containerRect = generatedContainer.GetComponent<RectTransform>();
+            containerRect.anchorMin = new Vector2(1f, 0f); // Bottom-Right anchor
+            containerRect.anchorMax = new Vector2(1f, 0f);
+            containerRect.pivot = new Vector2(1f, 0f);
+            containerRect.anchoredPosition = new Vector2(-60f, 60f);
+            containerRect.sizeDelta = new Vector2(80f, 80f);
+        }
 
         // Background Panel
-        GameObject bgObj = new GameObject("DashBG", typeof(RectTransform), typeof(Image));
-        bgObj.transform.SetParent(generatedContainer.transform, false);
-        RectTransform bgRect = bgObj.GetComponent<RectTransform>();
-        bgRect.anchorMin = Vector2.zero;
-        bgRect.anchorMax = Vector2.one;
-        bgRect.sizeDelta = Vector2.zero;
+        Transform bgTransform = generatedContainer.transform.Find("DashBG");
+        GameObject bgObj = bgTransform != null ? bgTransform.gameObject : new GameObject("DashBG", typeof(RectTransform), typeof(Image));
+        if (bgTransform == null)
+        {
+            bgObj.transform.SetParent(generatedContainer.transform, false);
+            RectTransform bgRect = bgObj.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.sizeDelta = Vector2.zero;
+        }
         Image bgImage = bgObj.GetComponent<Image>();
         bgImage.color = bgColor;
+        bgImage.raycastTarget = false;
         if (dialSprite != null)
         {
             bgImage.sprite = dialSprite;
         }
 
         // Dash Icon
-        GameObject iconObj = new GameObject("DashIcon", typeof(RectTransform), typeof(Image));
-        iconObj.transform.SetParent(generatedContainer.transform, false);
-        RectTransform iRect = iconObj.GetComponent<RectTransform>();
-        iRect.anchorMin = Vector2.zero;
-        iRect.anchorMax = Vector2.one;
-        iRect.offsetMin = new Vector2(16f, 16f);
-        iRect.offsetMax = new Vector2(-16f, -16f);
+        Transform iconTransform = generatedContainer.transform.Find("DashIcon");
+        GameObject iconObj = iconTransform != null ? iconTransform.gameObject : new GameObject("DashIcon", typeof(RectTransform), typeof(Image));
+        if (iconTransform == null)
+        {
+            iconObj.transform.SetParent(generatedContainer.transform, false);
+            RectTransform iRect = iconObj.GetComponent<RectTransform>();
+            iRect.anchorMin = Vector2.zero;
+            iRect.anchorMax = Vector2.one;
+            iRect.offsetMin = new Vector2(16f, 16f);
+            iRect.offsetMax = new Vector2(-16f, -16f);
+        }
         iconImage = iconObj.GetComponent<Image>();
         iconImage.color = readyColor;
+        iconImage.raycastTarget = false;
         if (dashIconSprite != null)
         {
             iconImage.sprite = dashIconSprite;
         }
 
         // Cooldown Radial Overlay
-        GameObject fillObj = new GameObject("DashCooldownFill", typeof(RectTransform), typeof(Image));
-        fillObj.transform.SetParent(generatedContainer.transform, false);
-        RectTransform fillRect = fillObj.GetComponent<RectTransform>();
-        fillRect.anchorMin = Vector2.zero;
-        fillRect.anchorMax = Vector2.one;
-        fillRect.sizeDelta = Vector2.zero;
+        Transform fillTransform = generatedContainer.transform.Find("DashCooldownFill");
+        GameObject fillObj = fillTransform != null ? fillTransform.gameObject : new GameObject("DashCooldownFill", typeof(RectTransform), typeof(Image));
+        if (fillTransform == null)
+        {
+            fillObj.transform.SetParent(generatedContainer.transform, false);
+            RectTransform fillRect = fillObj.GetComponent<RectTransform>();
+            fillRect.anchorMin = Vector2.zero;
+            fillRect.anchorMax = Vector2.one;
+            fillRect.sizeDelta = Vector2.zero;
+        }
         cooldownFillImage = fillObj.GetComponent<Image>();
         cooldownFillImage.color = overlayFillColor;
         cooldownFillImage.type = Image.Type.Filled;
@@ -202,20 +233,25 @@ public class DashCooldownUI : MonoBehaviour
         cooldownFillImage.fillOrigin = (int)Image.Origin360.Top;
         cooldownFillImage.fillClockwise = false;
         cooldownFillImage.fillAmount = 0f;
+        cooldownFillImage.raycastTarget = false;
         if (dialSprite != null)
         {
             cooldownFillImage.sprite = dialSprite;
         }
 
         // Text Label underneath the icon
-        GameObject textObj = new GameObject("DashLabel", typeof(RectTransform), typeof(Text));
-        textObj.transform.SetParent(generatedContainer.transform, false);
-        RectTransform tRect = textObj.GetComponent<RectTransform>();
-        tRect.anchorMin = new Vector2(0f, 0f);
-        tRect.anchorMax = new Vector2(1f, 0f);
-        tRect.pivot = new Vector2(0.5f, 1f);
-        tRect.anchoredPosition = new Vector2(0f, -6f);
-        tRect.sizeDelta = new Vector2(100f, 22f);
+        Transform textTransform = generatedContainer.transform.Find("DashLabel");
+        GameObject textObj = textTransform != null ? textTransform.gameObject : new GameObject("DashLabel", typeof(RectTransform), typeof(Text));
+        if (textTransform == null)
+        {
+            textObj.transform.SetParent(generatedContainer.transform, false);
+            RectTransform tRect = textObj.GetComponent<RectTransform>();
+            tRect.anchorMin = new Vector2(0f, 0f);
+            tRect.anchorMax = new Vector2(1f, 0f);
+            tRect.pivot = new Vector2(0.5f, 1f);
+            tRect.anchoredPosition = new Vector2(0f, -6f);
+            tRect.sizeDelta = new Vector2(100f, 22f);
+        }
         cooldownText = textObj.GetComponent<Text>();
         cooldownText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
             ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
@@ -224,11 +260,12 @@ public class DashCooldownUI : MonoBehaviour
         cooldownText.alignment = TextAnchor.MiddleCenter;
         cooldownText.color = Color.white;
         cooldownText.text = "DASH";
+        cooldownText.raycastTarget = false;
     }
 
     private void OnDestroy()
     {
-        if (generatedContainer != null)
+        if (generatedContainer != null && generatedContainer != gameObject)
         {
             Destroy(generatedContainer);
         }
