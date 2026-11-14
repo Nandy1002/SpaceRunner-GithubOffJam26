@@ -1,0 +1,12 @@
+{
+  "name": "SpaceRunner.Runtime",
+  "rootNamespace": "SpaceRunner",
+  "references": [
+    "SpaceRunner.Core",
+    "Unity.InputSystem",
+    "Unity.ugui",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "SpaceRunner.Player"
+  ],
+  "autoReferenced": true
+}

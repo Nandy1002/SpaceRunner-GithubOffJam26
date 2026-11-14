@@ -150,7 +150,7 @@ public class FirstPersonController : MonoBehaviour
 
     void Start()
     {
-        if(lockCursor)
+        if(lockCursor && !InputManager.Instance.CursorExternallyManaged)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
@@ -164,16 +164,18 @@ public class FirstPersonController : MonoBehaviour
     {
         InputManager cameraInput = InputManager.Instance;
         bool gravityUIOpen = cameraInput.TabHeld;
-        if (gravityUIOpen)
+        if (!cameraInput.CursorExternallyManaged && gravityUIOpen)
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = false;
         }
-        else if (lockCursor)
+        else if (!cameraInput.CursorExternallyManaged && lockCursor)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
+
+        if (cameraInput.GameplayInputBlocked) return;
 
         #region Camera
 
@@ -482,6 +484,27 @@ public class FirstPersonController : MonoBehaviour
         rb.angularVelocity = Vector3.zero;
         gravityRotationConstraintsReleased = true;
     }
+    // Called by the run/session adapter; standalone locomotion does not depend on a menu.
+    public void ResetForRun(Vector3 position, Quaternion rotation)
+    {
+        rb.position = position; rb.rotation = rotation;
+        rb.linearVelocity = rb.angularVelocity = Vector3.zero;
+        transform.SetPositionAndRotation(position, rotation);
+        gravityOrientation = gravityTransitionStartOrientation = rotation;
+        gravityTransitionProgress = 1f; gravityRotationConstraintsReleased = false;
+        rb.constraints = standingRigidbodyConstraints;
+        yaw = pitch = currentSlideTilt = currentWallRunLean = 0;
+        slideTimeRemaining = slideCooldownRemaining = jumpBufferRemaining = timer = 0;
+        currentMoveSpeed = walkSpeed; currentPostureHeightMultiplier = 1;
+        isZoomed = false; groundContactThisStep = false;
+        SetCapsuleHeight(1);
+        jointPosturePosition = jointOriginalPos;
+        joint.localPosition = jointOriginalPos;
+        playerCamera.transform.localRotation = Quaternion.identity;
+        playerCamera.fieldOfView = fov;
+        playerState.SetCurrentState(PlayerStateEnum.OnAir);
+    }
+
     private void Crouch()
     {
         if (playerState.IsInState(PlayerStateEnum.Crouch))

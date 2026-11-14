@@ -1,0 +1,13 @@
+{
+  "name": "SpaceRunner.PlayMode.Tests",
+  "references": [
+    "SpaceRunner.Core",
+    "SpaceRunner.Runtime",
+    "Unity.InputSystem",
+    "Unity.ugui",
+    "SpaceRunner.Player"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

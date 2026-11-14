@@ -1,8 +1,12 @@
 fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/Graphics.meta
 guid: f00f3e0d3a299424c87b23500b98b5e5
+========
+guid: 6fa38184fde85c5d9f128b70de2d8152
+>>>>>>>> b1b6dde9ec83145d6dfdcb2aeebf7f67869b98f4:Assets/Editor.meta
 folderAsset: yes
 DefaultImporter:
   externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
+  userData:
+  assetBundleName:
+  assetBundleVariant:
