@@ -268,18 +268,18 @@ namespace SpaceRunner.Editor
             var binding = canvas.gameObject.AddComponent<GravityMenuBinding>();
             var border = Panel("Selection Border", canvas.transform, Vector2.zero, new Vector2(420, 420), Paper);
             border.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(Art + "/DialOutline.png");
-            var serialized = new SerializedObject(menu); var entries = serialized.FindProperty("gravityImages"); entries.arraySize = 8;
-            for (int i = 0; i < 8; i++)
+            var serialized = new SerializedObject(menu); var entries = serialized.FindProperty("gravityImages"); entries.arraySize = 4;
+            string[] labels = { "DOWN", "LEFT", "UP", "RIGHT" };
+            for (int i = 0; i < 4; i++)
             {
                 var image = Panel("Direction " + i, canvas.transform, Vector2.zero, new Vector2(400, 400), new Color(0.65f, 0.65f, 0.65f, 0.7f));
                 image.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(Art + "/DialOutline.png");
                 image.type = Image.Type.Filled; image.fillMethod = Image.FillMethod.Radial360;
-                image.fillOrigin = 0; image.fillClockwise = true; image.fillAmount = 0.125f;
-                image.transform.localRotation = Quaternion.Euler(0, 0, 22.5f - 45 * i);
-                float angle = (270 - 45 * i) * Mathf.Deg2Rad;
-                string[] labels = { "DOWN", "DOWN LEFT", "LEFT", "UP LEFT", "UP", "UP RIGHT", "RIGHT", "DOWN RIGHT" };
+                image.fillOrigin = 0; image.fillClockwise = true; image.fillAmount = 0.25f;
+                image.transform.localRotation = Quaternion.Euler(0, 0, 45f - 90 * i);
+                float angle = (270 - 90 * i) * Mathf.Deg2Rad;
                 Label("Direction Label " + i, canvas.transform, labels[i], new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * 145,
-                    new Vector2(130, 25), 16);
+                    new Vector2(130, 25), 18);
                 entries.GetArrayElementAtIndex(i).objectReferenceValue = image;
             }
             serialized.ApplyModifiedPropertiesWithoutUndo();

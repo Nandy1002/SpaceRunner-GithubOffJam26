@@ -311,13 +311,11 @@ public class FirstPersonController : MonoBehaviour
         }
 
         transform.rotation = smoothedGravityOrientation * Quaternion.Euler(currentSlideTilt, yaw, 0f);
+        rb.rotation = transform.rotation;
+        rb.angularVelocity = Vector3.zero;
         if (gravityTransitionProgress >= 1f && gravityRotationConstraintsReleased)
         {
-            rb.rotation = transform.rotation;
-            rb.angularVelocity = Vector3.zero;
-            rb.constraints = IsSliding
-                ? standingRigidbodyConstraints & ~RigidbodyConstraints.FreezeRotationX
-                : standingRigidbodyConstraints;
+            rb.constraints = standingRigidbodyConstraints;
             gravityRotationConstraintsReleased = false;
         }
 
@@ -390,7 +388,8 @@ public class FirstPersonController : MonoBehaviour
         Vector3 moveDirection = sliding
             ? slideDirection
             : new Vector3(moveInput.x, 0f, moveInput.y);
-        bool sprinting = state == PlayerStateEnum.Run;
+        bool sprinting = state == PlayerStateEnum.Run
+            || (state == PlayerStateEnum.OnAir && (input.SprintHeld || currentMoveSpeed > walkSpeed * 1.1f));
         float targetSpeed = sliding
             ? slideCurrentSpeed
             : sprinting ? sprintSpeed
@@ -464,6 +463,8 @@ public class FirstPersonController : MonoBehaviour
         return snappedPlayerOrientation * Vector3.up;
     }
 
+    public Vector3 GetGravityUp() => GravityUp;
+
     public void AlignToGravity(Vector3 gravity, float snappedPlayerYaw)
     {
         if (gravity.sqrMagnitude < 0.001f)
@@ -478,11 +479,12 @@ public class FirstPersonController : MonoBehaviour
         gravityTransitionStartOrientation = transform.rotation;
         gravityTransitionProgress = 0f;
         yaw = 0f;
+        currentSlideTilt = 0f;
 
-        // The prefab freezes all Rigidbody rotation axes; release them during the animated roll.
-        rb.constraints = standingRigidbodyConstraints & ~RigidbodyConstraints.FreezeRotation;
+        // Keep Rigidbody rotation strictly constrained so physics collisions cannot topple the capsule over.
+        rb.constraints = standingRigidbodyConstraints;
         rb.angularVelocity = Vector3.zero;
-        gravityRotationConstraintsReleased = true;
+        gravityRotationConstraintsReleased = false;
     }
     // Called by the run/session adapter; standalone locomotion does not depend on a menu.
     public void ResetForRun(Vector3 position, Quaternion rotation)
@@ -599,7 +601,7 @@ public class FirstPersonController : MonoBehaviour
         {
             SetState(PlayerStateEnum.Idle);
         }
-        else if (enableSprint && sprintHeld)
+        else if (enableSprint && (sprintHeld || currentMoveSpeed >= sprintSpeed * 0.75f))
         {
             SetState(PlayerStateEnum.Run);
         }
@@ -648,7 +650,7 @@ public class FirstPersonController : MonoBehaviour
             return true;
         }
 
-        Vector3 up = transform.up;
+        Vector3 up = GravityUp;
         Vector3 worldCenter = transform.TransformPoint(playerCapsule.center);
         Vector3 scale = transform.lossyScale;
         float worldRadius = playerCapsule.radius * Mathf.Max(scale.x, scale.z);
@@ -663,8 +665,12 @@ public class FirstPersonController : MonoBehaviour
 
         Vector3 origin = currentTop + up * 0.02f;
         float probeOffset = worldRadius * 0.5f;
-        Vector3 right = transform.right * probeOffset;
-        Vector3 forward = transform.forward * probeOffset;
+        Vector3 right = Vector3.Cross(up, transform.forward).normalized * probeOffset;
+        if (right.sqrMagnitude < 0.001f)
+        {
+            right = Vector3.Cross(up, transform.right).normalized * probeOffset;
+        }
+        Vector3 forward = Vector3.Cross(right, up).normalized * probeOffset;
         float probeDistance = clearance + 0.05f;
 
         return !Physics.Raycast(origin, up, probeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)

@@ -6,7 +6,7 @@ public sealed class InputManager : MonoBehaviour
     public static InputManager Instance { get; private set; }
 
     private InputSystem_Actions controls;
-    [SerializeField, Range(1f, 2f)] private float sprintHoldDuration = 1.5f;
+    [SerializeField, Range(0.1f, 2f)] private float sprintHoldDuration = 0.4f;
     private float forwardHoldTime;
 
     // Optional integration hooks. Defaults preserve the standalone player behaviour.
@@ -24,7 +24,10 @@ public sealed class InputManager : MonoBehaviour
     public bool ZoomPressedThisFrame => !GameplayInputBlocked && Player.Gravity.WasPressedThisFrame();
     public bool ZoomReleasedThisFrame => !GameplayInputBlocked && Player.Gravity.WasReleasedThisFrame();
     public bool ZoomHeld => !GameplayInputBlocked && Player.Gravity.IsPressed();
-    public bool SprintHeld => !GameplayInputBlocked && forwardHoldTime >= sprintHoldDuration;
+    private bool IsShiftOrSprintButtonPressed =>
+        (Keyboard.current != null && (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed))
+        || (Gamepad.current != null && Gamepad.current.leftStickButton.isPressed);
+    public bool SprintHeld => !GameplayInputBlocked && (forwardHoldTime >= sprintHoldDuration || IsShiftOrSprintButtonPressed);
     public bool JumpPressedThisFrame => !GameplayInputBlocked && Player.Jump.WasPressedThisFrame();
     public bool DashPressedThisFrame => !GameplayInputBlocked && Player.Dash.WasPressedThisFrame();
     public bool CrouchPressedThisFrame => !GameplayInputBlocked && Player.Crouch.WasPressedThisFrame();

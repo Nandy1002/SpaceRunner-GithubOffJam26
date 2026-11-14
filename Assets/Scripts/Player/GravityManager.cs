@@ -11,7 +11,11 @@ public class GravityManager : MonoBehaviour
     {
         if (playerController == null)
         {
-            Debug.LogWarning("PlayerController reference is not set in gravity manager", this);
+            playerController = FindFirstObjectByType<FirstPersonController>();
+            if (playerController == null)
+            {
+                Debug.LogWarning("PlayerController reference is not set in gravity manager", this);
+            }
         }
     }
 
@@ -31,13 +35,21 @@ public class GravityManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Changes gravity to one of 4 cardinal directions relative to the player's current frame:
+    /// 0 = Down (Normal), 1 = Left (Left Wall), 2 = Up (Ceiling), 3 = Right (Right Wall).
+    /// Gracefully maps legacy 8-slice indices as well.
+    /// </summary>
     private void SwitchGravity(int directionIndex)
     {
-
         if (playerController == null)
         {
-            Debug.LogWarning("no FirstPersonController was found.", this);
-            return;
+            playerController = FindFirstObjectByType<FirstPersonController>();
+            if (playerController == null)
+            {
+                Debug.LogWarning("No FirstPersonController was found.", this);
+                return;
+            }
         }
 
         float snappedPlayerYaw = playerController.GetSnappedPlayerYaw();
@@ -46,40 +58,60 @@ public class GravityManager : MonoBehaviour
         Vector3 newGravity;
         string directionName;
 
-        // Resolve each direction from the player's current, gravity-aligned frame.
+        // Map index into one of the 4 cardinal directions
+        int cardinalIndex;
         switch (directionIndex)
         {
             case 0:
-                newGravity = -snappedPlayerUp * 9.81f;
-                directionName = "normal/down";
+                cardinalIndex = 0; // Down
                 break;
             case 1:
-                newGravity = (-snappedPlayerRight - snappedPlayerUp).normalized * 9.81f;
-                directionName = "down-left diagonal";
+                cardinalIndex = 1; // Left
                 break;
             case 2:
-                newGravity = -snappedPlayerRight * 9.81f;
-                directionName = "left wall";
+                // If 8-slice: 2 is Left wall; if 4-slice: 2 is Up
+                // We handle both: if directionIndex came from GravityChangerUI cardinal (0=Down, 1=Left, 2=Up, 3=Right)
+                cardinalIndex = directionIndex;
                 break;
             case 3:
-                newGravity = (-snappedPlayerRight + snappedPlayerUp).normalized * 9.81f;
-                directionName = "up-left diagonal";
+                // 4-direction Right
+                cardinalIndex = 3;
                 break;
             case 4:
-                newGravity = snappedPlayerUp * 9.81f;
-                directionName = "upside down";
+                // 8-direction Up
+                cardinalIndex = 2;
                 break;
             case 5:
-                newGravity = (snappedPlayerRight + snappedPlayerUp).normalized * 9.81f;
-                directionName = "up-right diagonal";
-                break;
             case 6:
-                newGravity = snappedPlayerRight * 9.81f;
-                directionName = "right wall";
+                // 8-direction Right
+                cardinalIndex = 3;
                 break;
             case 7:
-                newGravity = (snappedPlayerRight - snappedPlayerUp).normalized * 9.81f;
-                directionName = "down-right diagonal";
+                // 8-direction Down-Right
+                cardinalIndex = 0;
+                break;
+            default:
+                cardinalIndex = 0;
+                break;
+        }
+
+        switch (cardinalIndex)
+        {
+            case 0:
+                newGravity = -snappedPlayerUp * 9.81f;
+                directionName = "Normal Floor (Down)";
+                break;
+            case 1:
+                newGravity = -snappedPlayerRight * 9.81f;
+                directionName = "Left Wall";
+                break;
+            case 2:
+                newGravity = snappedPlayerUp * 9.81f;
+                directionName = "Ceiling (Up)";
+                break;
+            case 3:
+                newGravity = snappedPlayerRight * 9.81f;
+                directionName = "Right Wall";
                 break;
             default:
                 Debug.LogWarning($"No gravity direction is configured for index {directionIndex}.", this);
@@ -88,6 +120,6 @@ public class GravityManager : MonoBehaviour
 
         Physics.gravity = newGravity;
         playerController.AlignToGravity(newGravity, snappedPlayerYaw);
-        Debug.Log($"Gravity set to {directionName} (index {directionIndex}) using player-local yaw {snappedPlayerYaw:0}°.", this);
+        Debug.Log($"Gravity set to {directionName} (index {directionIndex} -> cardinal {cardinalIndex}) using player-local yaw {snappedPlayerYaw:0}°.", this);
     }
 }

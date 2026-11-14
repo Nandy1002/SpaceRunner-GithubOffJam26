@@ -4,7 +4,7 @@ using UnityEngine;
 public class WallRunAbility : MonoBehaviour, IAbility
 {
     [Header("Wall Run")]
-    [SerializeField] private float wallRunSpeed = 10f;
+    [SerializeField] private float wallRunSpeed = 22f;
     [SerializeField] private float wallCheckDistance = 1.2f;
     [SerializeField, Min(0f)] private float wallSnapSpeed = 6f;
     [SerializeField, Min(0f)] private float wallClearance = 0.05f;
@@ -21,8 +21,8 @@ public class WallRunAbility : MonoBehaviour, IAbility
     [SerializeField] private LayerMask groundLayerMask = ~0;
 
     [Header("Wall Jump")]
-    [SerializeField, Min(0f)] private float wallJumpUpForce = 4f;
-    [SerializeField, Min(0f)] private float wallJumpAwayForce = 3f;
+    [SerializeField, Min(0f)] private float wallJumpUpForce = 5f;
+    [SerializeField, Min(0f)] private float wallJumpAwayForce = 4f;
     [SerializeField, Min(0f)] private float wallJumpRegrabCooldown = 0.75f;
     [SerializeField, Min(0f)] private float wallJumpRegrabSurfaceDistance = 0.5f;
     private Rigidbody rb;
@@ -36,6 +36,8 @@ public class WallRunAbility : MonoBehaviour, IAbility
     private Vector3 lastWallNormal;
     private float wallJumpRegrabTimer;
     private readonly RaycastHit[] wallHitBuffer = new RaycastHit[8];
+
+    private Vector3 GravityUp => Physics.gravity.sqrMagnitude > 0.001f ? -Physics.gravity.normalized : Vector3.up;
 
     public bool IsActive => isWallRunning;
 
@@ -116,7 +118,7 @@ public class WallRunAbility : MonoBehaviour, IAbility
 
     private bool FindWall(out Vector3 normal, out float distance, out Collider wallCollider, out Vector3 point)
     {
-        Vector3 origin = transform.position + Vector3.up * wallCheckHeight;
+        Vector3 origin = transform.position + GravityUp * wallCheckHeight;
 
         if (TryFindWallInDirection(origin, transform.right, out RaycastHit rightHit)
             || TryFindWallInDirection(origin, -transform.right, out rightHit))
@@ -171,6 +173,7 @@ public class WallRunAbility : MonoBehaviour, IAbility
 
     private bool IsGrounded()
     {
+        Vector3 gravityUp = GravityUp;
         Vector3 checkPosition;
         if (groundCheck != null)
         {
@@ -186,19 +189,18 @@ public class WallRunAbility : MonoBehaviour, IAbility
                 return false;
             }
 
-            checkPosition = new Vector3(capsule.bounds.center.x, capsule.bounds.min.y + groundCheckRadius,
-                capsule.bounds.center.z);
+            checkPosition = transform.position + capsule.center - gravityUp * (capsule.height * 0.5f - groundCheckRadius);
         }
 
         // A downward ray avoids counting a nearby vertical wall as ground.
         RaycastHit[] hits = Physics.RaycastAll(
-            checkPosition + Vector3.up * 0.05f, Vector3.down, groundCheckRadius + 0.1f,
+            checkPosition + gravityUp * 0.05f, -gravityUp, groundCheckRadius + 0.1f,
             groundLayerMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < hits.Length; i++)
         {
             Transform hitTransform = hits[i].transform;
             bool isPlayerCollider = hitTransform == transform || hitTransform.IsChildOf(transform);
-            if (!isPlayerCollider && hits[i].normal.y > 0.5f)
+            if (!isPlayerCollider && Vector3.Dot(hits[i].normal, gravityUp) > 0.5f)
             {
                 return true;
             }
@@ -222,16 +224,21 @@ public class WallRunAbility : MonoBehaviour, IAbility
     {
         wallRunTimer += Time.fixedDeltaTime;
 
+        Vector3 gravityUp = GravityUp;
         Vector3 runDirection =
-            Vector3.ProjectOnPlane(transform.forward, wallNormal).normalized;
+            Vector3.ProjectOnPlane(transform.forward, wallNormal);
+        runDirection = Vector3.ProjectOnPlane(runDirection, gravityUp).normalized;
 
         if (runDirection.sqrMagnitude > 0f)
         {
             Vector3 velocity = rb.linearVelocity;
-            rb.linearVelocity = new Vector3(
-                runDirection.x * wallRunSpeed,
-                Mathf.Max(velocity.y, -maxWallRunFallSpeed),
-                runDirection.z * wallRunSpeed);
+            Vector3 verticalVel = Vector3.Project(velocity, gravityUp);
+            float fallSpeed = Vector3.Dot(verticalVel, gravityUp);
+            if (fallSpeed < -maxWallRunFallSpeed)
+            {
+                verticalVel = -gravityUp * maxWallRunFallSpeed;
+            }
+            rb.linearVelocity = runDirection * wallRunSpeed + verticalVel;
         }
 
         SnapTowardWall(wallHitDistance);
@@ -266,12 +273,13 @@ public class WallRunAbility : MonoBehaviour, IAbility
         wallJumpRegrabTimer = wallJumpRegrabCooldown;
         StopWallRun();
 
+        Vector3 gravityUp = GravityUp;
         Vector3 velocity = rb.linearVelocity;
-        velocity.y = 0f;
+        velocity -= Vector3.Project(velocity, gravityUp);
         rb.linearVelocity = velocity;
 
         rb.AddForce(
-            Vector3.up * wallJumpUpForce + wallNormal * wallJumpAwayForce,
+            gravityUp * wallJumpUpForce + wallNormal * wallJumpAwayForce,
             ForceMode.VelocityChange);
     }
 
